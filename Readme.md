@@ -1,5 +1,4 @@
 #Dali Lighting System
-This is a project that uses multiple long-range ultrasonic sensors
 
 This is a RPi based project that is used to control devices on
 a DALI(Digital Addressable Lighting Interface) Bus and monitor
