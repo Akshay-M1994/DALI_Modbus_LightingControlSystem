@@ -34,19 +34,8 @@ DaliRelayStatus = {'RelayStatus' : False}
 #Json Message for Dali Dimmer
 DaliDimmerLevel = {'BrightnessLevel' : 0}
 #Json Message for current,voltage & power measurements
-PowerMonitoring = {'Voltage': 0 , 'Current': 0 , 'kWh' : 0 , 'Alarm State' : False}
+PowerMonitoring = {'Voltage': 0 , 'Current': 0 , 'kWh' : 0 , 'Hz' : 0 , 'kW' : 0 , 'kVar' : 0 , 'PF' : 0 , 'Alarm State' : False}
 #/-----------------------Function Declarations-------------------------------------/
-def GetRelayStatus():
-    
-    #First we read the value in the DTR register
-    DTR0_Value  = DaliHat.QueryLevel(DALI_RELAY_ADD)
-    
-    #Next we determine discrete state i.e. either true(ON) or false(OFF) based on DTR value
-    if(DTR0_Value == 0) :
-        return False
-    elif(DTR0_Value == 254):
-        return True
-
 # The callback for when the client receives a CONNACK response from the server.
 def on_connect(client, userdata, rc, *extra_params):
     
@@ -117,6 +106,19 @@ def on_message(client, userdata, msg):
         DaliDimmerLevel['BrightnessLevel'] = DaliHat.QueryLevel(DALI_DIMMER_ADD)
         client.publish('v1/devices/me/rpc/response/'+requestId,json.dumps(DaliDimmerLevel['BrightnessLevel']),1)
 
+
+def GetRelayStatus():
+    
+    #First we read the value in the DTR register
+    DTR0_Value  = DaliHat.QueryLevel(DALI_RELAY_ADD)
+    
+    #Next we determine discrete state i.e. either true(ON) or false(OFF) based on DTR value
+    if(DTR0_Value == 0) :
+        return False
+    elif(DTR0_Value == 254):
+        return True
+    
+    
 #This thread is used to reconnect to the server in the event of disconnection.If client disconnects from server,we attempt a reconnection
 #every 5s
         
@@ -149,6 +151,10 @@ def DALI_SysMonitor(self):
                  PowerMonitoring['Voltage'] = ME_D111.GetVoltage()
                  PowerMonitoring['Current'] = ME_D111.GetCurrent()
                  PowerMonitoring['kWh'] = ME_D111.GetActiveEnergy()
+                 PowerMonitoring['kW'] = ME_D111.GetActivePwr()
+                 PowerMonitoring['Hz'] = ME_D111.GetFrequency()
+                 PowerMonitoring['kVar'] = ME_D111.GetReactivePwr()
+                 PowerMonitoring['PF'] = ME_D111.GetPwrFactor()
                  PowerMonitoring['Alarm State'] = ME_D111.GetProgThresholdStatus()
                 
                  #Get Relay Status & Brightness Level
@@ -166,7 +172,7 @@ def DALI_SysMonitor(self):
                  print(DaliRelayStatusJSON)
                 
                  #Publish updated attributes
-                 client.publish('v1/devices/me/attributes',PowerMonitoringJSON,1)
+                 client.publish('v1/devices/me/telemetry',PowerMonitoringJSON,1)
                  client.publish('v1/devices/me/attributes',DaliDimmerLevelJSON,1)
                  client.publish('v1/devices/me/attributes',DaliRelayStatusJSON,1)
                  
@@ -189,7 +195,10 @@ client.username_pw_set(ACCESS_TOKEN)
 client.disconnect()
 #---------------------------------Creating & Starting Tasks---------------------------/
 #Print ATX DaliHat information to serial shell monitor
-DaliHat.Print_DaliHatInfo()
+DaliHat.PrintDALI_HatVersionInfo()
+
+#Print ATX DALI bus status
+DaliHat.GetDALI_BusStatus()
 
 #Add threads to scheduler
 pyRTOS.add_task(pyRTOS.Task(MQTT_ConnectionManager,6, name="MQTT_ConnManager", mailbox=False))

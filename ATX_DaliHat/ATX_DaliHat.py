@@ -11,6 +11,20 @@ DBG_ENABLED = False
 DaliTxDelay = 0.125
 DaliRxDelay = 0.200
 
+#DALI Broadcast address
+BROADCAST_ADDRESS = 0x7F
+
+#DALI Short Address Range
+MAX_SHORT_ADDRESS = 0x40
+MIN_SHORT_ADDRESS = 0x00
+
+#DALI Long/Random Address Range
+MAX_RANDOM_ADDRESS = 0xFFFFFF
+MIN_RANDOM_ADDRESS = 0x000000
+
+#DALI Commands
+#class DALI_Commands(IntEnum):
+
 #enums used for configuring pins
 class ATX_DaliHatPwrPins(IntEnum):
     SECONDARY_PWR_PIN = 5
@@ -37,7 +51,7 @@ class ATX_DaliHat():
         
         self.CheckPwrStatus()
     
-    def Print_DaliHatInfo(self):
+    def PrintDALI_HatVersionInfo(self):
         
         #Query DALI Hat version status
         self.ATX_DaliHatSerial.write("v\n".encode())
@@ -55,6 +69,8 @@ class ATX_DaliHat():
         print("FW Version: " + Response[3:5])
         print("Hardware Type:" + Response[5:7])
         
+    def GetDALI_BusStatus(self):
+
         #Query DALI Bus state
         self.ATX_DaliHatSerial.write("d\n".encode())
         
@@ -65,11 +81,9 @@ class ATX_DaliHat():
         bytesAvailable = self.ATX_DaliHatSerial.inWaiting()
         Response = self.ATX_DaliHatSerial.read(bytesAvailable).decode("utf-8")
         
-        #Remove newline characters
-        Response = Response.strip()
-        
-        print(Response)
-        
+        #Strip newline characters from response
+        Response = Response.replace("\n","")
+                
         #Print DALI Bus state
         if (Response.find("D01") != -1):
             print("No power on DALI bus")
@@ -81,6 +95,7 @@ class ATX_DaliHat():
             print("Bus Voltage > 24V")
         else:
             print("Invalid Response Received!")
+        
 
     def CheckPwrStatus(self):
 
@@ -137,7 +152,7 @@ class ATX_DaliHat():
         #Read Response
         Response = self.ATX_DaliHatSerial.read(bytesAvailable).decode("utf-8")
         
-        #strip newline characters from response
+        #Strip newline characters from response
         Response = Response.replace("\n","")
         
         print(Response)
@@ -189,16 +204,26 @@ class ATX_DaliHat():
         #Query Device Status
         self.ATX_DaliHatSerial.write("h%02X90\n".encode()%(2*DevAddress + 1))
 
-        #Read Response
-        Response = self.ATX_DaliHatSerial.read(4).decode("utf-8")
+        #Transmission Delay
+        time.sleep(DaliTxDelay)
 
-        print("Response Received :",Response)
+        #Read number of bytes available
+        bytesAvailable = self.ATX_DaliHatSerial.inWaiting()
+
+        #Read Response
+        Response = self.ATX_DaliHatSerial.read(bytesAvailable).decode("utf-8")
         
+        #Strip newline characters from response
+        Response = Response.replace("\n","")
+
+        #Response must contain 'J' for it to be valid , refer to documentation
+        if(Response.find("J") == -1):
+            print("Invalid Response Received")
+        else:
+            print("Status of Device [%02X] is [%s]"%(DevAddress,Response))
+                
     def Initialize(self):
         
-        #Clear input serial buffer
-        self.ClearInputSerialBuffer()
-
         #Broadcast Initialize command
         self.ATX_DaliHatSerial.write("tA500\n".encode())
         
@@ -208,28 +233,24 @@ class ATX_DaliHat():
         self.ATX_DaliHatSerial.write("tA700\n".encode())
         
     def AssignSingleAddress(self,DeviceAddress):
-        
-        #Clear input serial buffer
-        self.ClearInputSerialBuffer()
-        
+                
         #Load the DTR into a single device
         self.ATX_DaliHatSerial.write('hA3%02X\n'.encode()%(2*DeviceAddress + 1))
         
         #Allow delay for DTR write to be written
-        time.sleep(DaliTxDelay/2)
+        time.sleep(DaliTxDelay)
         
         #Save DTR as short address
         self.ATX_DaliHatSerial.write('tFF80\n'.encode())
         
         #Allow time for DTR to be written to short address
-        time.sleep(DaliTxDelay/2)
+        time.sleep(DaliTxDelay)
         
-    
     def CommissionDevices(self):
         
         #Variable to track search boundaries during binary search
-        Low_LongAdd = 0x000000
-        High_LongAdd = 0xFFFFFF
+        Low_LongAdd  = MIN_RANDOM_ADDRESS
+        High_LongAdd = MAX_RANDOM_ADDRESS
         
         #Variable to track 'guess' address during binary search
         Random_24_BitAdd = (int)((Low_LongAdd + High_LongAdd)/2)
@@ -240,19 +261,16 @@ class ATX_DaliHat():
         LowByte = 0x00
         
         #Assigned short addresses as devices are enumerated
-        ShortAddress = 0x00
-        
-        #Clear input serial buffer
-        self.ClearInputSerialBuffer()
-        
+        ShortAddress = MIN_SHORT_ADDRESS
+                
         #Switch all devices off
-        self.SetTargetLevel(127,0)
+        self.SetTargetLevel(BROADCAST_ADDRESS,0)
         
         #Allow devices to switch off before issuing reset command
         time.sleep(DaliTxDelay)
         
         #Broadcast Reset command
-        self.Reset(127)
+        self.Reset(BROADCAST_ADDRESS)
         
         #Broadcast initialize command
         self.Initialize()
@@ -268,16 +286,14 @@ class ATX_DaliHat():
         
         print("Dali Master Now Searching For Long Addresses")
         
-        while ((Random_24_BitAdd <= (0xFFFFFF - 2)) and (ShortAddress <= 64)):
+        while ((Random_24_BitAdd <= (MAX_RANDOM_ADDRESS - 2)) and (ShortAddress <= MAX_SHORT_ADDRESS)):
             while((High_LongAdd - Low_LongAdd) > 1):
                    
                 #Split 24-bit address into high,middle & low bytes
                 HighByte = (Random_24_BitAdd >> 16)
                 MiddleByte = (Random_24_BitAdd >> 8) & 0x0000FF
                 LowByte = (Random_24_BitAdd & 0x0000FF)
-                                
-                print("Start Address : ",hex(Random_24_BitAdd))
-                
+                                             
                 #Write Search high byte
                 self.ATX_DaliHatSerial.write("hB1%02X\n".encode()%HighByte)
                 time.sleep(DaliTxDelay)
@@ -300,8 +316,8 @@ class ATX_DaliHat():
                 Response  = self.ATX_DaliHatSerial.read(bytesAvailable).decode("utf-8")
                 time.sleep(DaliTxDelay)
                 
+                #Strip newline characters from response
                 Response = Response.replace("\n","")
-                print("Response :",Response)
                 
                 #If adjust bounds based on response
                 if(Response.find("JFF") != -1):
@@ -312,14 +328,16 @@ class ATX_DaliHat():
                 #Update midpoint
                 Random_24_BitAdd = (int)((Low_LongAdd + High_LongAdd)/2)
                 
-                print("Curent Address : ",hex(Random_24_BitAdd + 1))
+                print("Curent Random/Long Address : ",hex(Random_24_BitAdd + 1))
             
-            if(High_LongAdd != 0xFFFFFF):
-                          
+            if(High_LongAdd != MAX_RANDOM_ADDRESS):
+                    
                 #Split new 24-bit address
                 HighByte = ((Random_24_BitAdd + 1) >> 16)
                 MiddleByte = ((Random_24_BitAdd + 1) >> 8) & 0x0000FF
                 LowByte = ((Random_24_BitAdd + 1) & 0x0000FF)
+              
+                print("Assigning short address.....")
               
                 #Write Search high byte
                 self.ATX_DaliHatSerial.write("hB1%02X\n".encode()%HighByte)
@@ -342,13 +360,28 @@ class ATX_DaliHat():
                 time.sleep(DaliTxDelay)
                 
                 #Print short-address assigned
-                print("Short-Assigned : [%02X]",%ShortAddress)
+                print("Short-Assigned : [%02X]"%ShortAddress)
+                
+                #Switch newly assigned device on and off
+                self.SetTargetLevel(ShortAddress,0)
+                
+                #Leave off for 1 second
+                time.sleep(1)
+                
+                #Switch newly assigned device on
+                self.SetTargetLevel(ShortAddress,254)
+                
+                #Leave on for 1 second
+                time.sleep(1)
+                
+                #Switch off again
+                self.SetTargetLevel(ShortAddress,0)
                 
                 #Increment short address
                 ShortAddress = ShortAddress + 1
                 
                 #Reset high part of long address in preparation for next iteration
-                High_LongAdd = 0xFFFFFF
+                High_LongAdd = MAX_RANDOM_ADDRESS
         
                 #Variable to track 'guess' address during binary search
                 Random_24_BitAdd = (int)((Low_LongAdd + High_LongAdd)/2)

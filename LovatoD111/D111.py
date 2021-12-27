@@ -76,30 +76,45 @@ class LovatoD111():
         def GetActivePwr(self):
 
             #Divide by 100 to convert to KW
-            ActivePwr = self.Lovato_D111.read_registers(D111_Registers.ActivePwr,DoubleWord)/100
-         
-            return ActivePwr
+            ActivePwrArr = self.Lovato_D111.read_registers(D111_Registers.ActivePwr,DoubleWord)
+            
+            #Bitwise logic for combining two bytes to form 16-bit integer
+            ActivePwr = ActivePwrArr[0]
+            ActivePwr = (ActivePwr << 8) | ActivePwrArr[1]
+            
+            return ActivePwr/100
 
         def GetReactivePwr(self):
          
             #Divide by 100 to convert to KVar
-            ReactivePwr = self.Lovato_D111.read_registers(D111_Registers.ReactivePwr,DoubleWord)/100
-         
-            return ReactivePwr
+            ReactivePwrArr = self.Lovato_D111.read_registers(D111_Registers.ReactivePwr,DoubleWord)
+            
+            #Bitwise logic for combining two bytes to form 16-bit integer
+            ReactivePwr = ReactivePwrArr[0]
+            ReactivePwr = (ReactivePwr << 8) | ReactivePwrArr[1]
+            
+            return ReactivePwr/100
 
         def GetPwrFactor(self):
          
-            #Divide by 100 to get power factor
-            PwrFactor = self.Lovato_D111.read_registers(D111_Registers.PwrFactor,DoubleWord)/100
-         
-            return PwrFactor
+            PwrFactorArr = self.Lovato_D111.read_registers(D111_Registers.PwrFactor,DoubleWord)
+            
+            #Bitwise logic for combining two bytes to form 16-bit integer
+            PwrFactor = PwrFactorArr[0]
+            PwrFactor = (PwrFactor << 8) | PwrFactorArr[1]
+                   
+            return PwrFactor/100
 
         def GetFrequency(self):
             
             #Divide by 10 to get frequency
-            Hz = self.Lovato_D111.read_registers(D111_Registers.Hz,DoubleWord)/10
+            HzArr = self.Lovato_D111.read_registers(D111_Registers.Hz,DoubleWord)
             
-            return Hz
+            #Bitwise logic for combining two bytes to form 16-bit integer
+            Hz = HzArr[0]
+            Hz = (Hz << 8) | HzArr[1]
+            
+            return Hz/10
 
         def GetHourCounter(self):
             
@@ -131,7 +146,7 @@ class LovatoD111():
 
             ThresholdExceeded = self.Lovato_D111.read_registers(D111_Registers.ProgThresholdStatus,Word)
             
-            #Any value greater than 0 indicatest that an alarm has been raised
+            #Any value greater than 0 indicates that an alarm has been raised
             if(ThresholdExceeded[0] > 0):
                 return True
             
